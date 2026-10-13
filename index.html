@@ -1,1 +1,305 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>লেখা সাজানোর টুল</title>
+<style>
+:root {
+  --dark: #2c2c2c;
+  --gold: #c49a35;
+  --bg: #f4f1eb;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: #292722;
+  font-family: Arial, sans-serif;
+  line-height: 1.55;
+}
+header {
+  background: var(--dark);
+  color: white;
+  padding: 20px 15px;
+  border-bottom: 4px solid var(--gold);
+}
+header h1 {
+  margin: 0;
+  color: #e3bd59;
+  font-size: 24px;
+}
+header p { margin: 5px 0 0; font-size: 14px; }
+main { max-width: 850px; margin: 18px auto; padding: 0 12px; }
+.panel {
+  background: white;
+  border: 1px solid #e1dbd0;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+label.title {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 9px;
+}
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  padding: 12px;
+  border: 1px solid #cfc8bc;
+  border-radius: 8px;
+  font: 16px/1.55 Arial, sans-serif;
+  resize: vertical;
+}
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--dark);
+  color: white;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+}
+button.gold { background: #a77e22; }
+button.light { background: #eee8dc; color: #292722; }
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.options label { font-weight: normal; }
+.options input { accent-color: #a77e22; }
+#preview {
+  border: 1px solid #d8d1c5;
+  border-radius: 8px;
+  padding: 14px;
+  background: white;
+  overflow-wrap: anywhere;
+  min-height: 100px;
+}
+#preview p, #preview h2, #preview h3 {
+  margin: 0 0 10px;
+}
+#preview h2 { font-size: 1.25em; }
+#preview h3 { font-size: 1.1em; }
+#preview .arabic {
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: plaintext;
+  font-family: "Noto Naskh Arabic", "Amiri", "Traditional Arabic", serif;
+  font-size: 1.2em;
+  line-height: 1.9;
+}
+#preview .mixed {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: plaintext;
+}
+#preview strong { font-weight: 700; }
+.hint { font-size: 13px; color: #716b61; }
+#status { color: #397447; font-size: 14px; margin-top: 10px; }
+@media(max-width:520px) {
+  .options { grid-template-columns: 1fr; }
+  button { flex: 1 1 auto; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>লেখা সাজানোর টুল</h1>
+  <p>বাংলা • العربية • English</p>
+</header>
+
+<main>
+  <section class="panel">
+    <label class="title" for="source">১. ChatGPT থেকে কপি করা লেখা পেস্ট করুন</label>
+    <textarea id="source" placeholder="এখানে লেখা পেস্ট করুন..."></textarea>
+    <div class="buttons">
+      <button class="gold" id="formatBtn">লেখা সাজাও</button>
+      <button class="light" id="clearBtn">সব মুছুন</button>
+    </div>
+    <p class="hint">শিরোনাম, বোল্ড ও অতিরিক্ত ফাঁকা লাইন ঠিক করার চেষ্টা করবে।</p>
+  </section>
+
+  <section class="panel">
+    <label class="title">২. সাজানোর বিকল্প</label>
+    <div class="options">
+      <label><input type="checkbox" id="headings" checked> শিরোনামের # চিহ্ন সরানো</label>
+      <label><input type="checkbox" id="bolds" checked> বোল্ড চিহ্ন রূপান্তর</label>
+      <label><input type="checkbox" id="spacing" checked> অতিরিক্ত ফাঁকা লাইন কমানো</label>
+      <label><input type="checkbox" id="arabic" checked> আরবি অনুচ্ছেদ ডানদিকে রাখা</label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <label class="title">৩. সাজানো লেখার প্রিভিউ</label>
+    <div id="preview">সাজানো লেখা এখানে দেখা যাবে।</div>
+    <div class="buttons">
+      <button class="gold" id="richCopy">ফরম্যাটসহ কপি</button>
+      <button id="plainCopy">সাধারণ লেখা কপি</button>
+    </div>
+    <div id="status" role="status"></div>
+    <p class="hint">ফরম্যাটসহ কপি করে Google Docs বা Word-এ পেস্ট করুন।</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let richHTML = "";
+  let plainText = "";
+
+  const hasArabic = s => /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(s);
+  const hasBanglaOrLatin = s => /[\u0980-\u09FFA-Za-z]/.test(s);
+  const arabicOnly = s => hasArabic(s) && !hasBanglaOrLatin(s);
+
+  function escapeHTML(s) {
+    return s.replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function inlineFormat(s) {
+    s = escapeHTML(s);
+    s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/__(.+?)__/g, "<strong>$1</strong>");
+    s = s.replace(/\*(.+?)\*/g, "<em>$1</em>");
+    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+    return s;
+  }
+
+  function removeMarkdown(s) {
+    return s.replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/__(.+?)__/g, "$1")
+      .replace(/\*(.+?)\*/g, "$1")
+      .replace(/`([^`]+)`/g, "$1");
+  }
+
+  function formatText() {
+    const input = $("source").value.replace(/\r\n?/g, "\n");
+    const lines = input.split("\n");
+    const blocks = [];
+    let paragraph = [];
+
+    function flush() {
+      if (paragraph.length) {
+        blocks.push({ type: "p", text: paragraph.join(" ").trim() });
+        paragraph = [];
+      }
+    }
+
+    for (const original of lines) {
+      const line = original.trim();
+      if (!line) {
+        flush();
+        continue;
+      }
+
+      const match = line.match(/^(#{1,6})\s+(.+)$/);
+      if (match && $("headings").checked) {
+        flush();
+        blocks.push({
+          type: match[1].length <= 2 ? "h2" : "h3",
+          text: match[2].trim()
+        });
+      } else {
+        paragraph.push(
+          $("headings").checked
+            ? line.replace(/^#{1,6}\s+/, "")
+            : line
+        );
+      }
+    }
+    flush();
+
+    const html = [];
+    const plain = [];
+
+    for (const block of blocks) {
+      let text = block.text;
+      if (!$("bolds").checked) text = removeMarkdown(text);
+
+      const rtl = $("arabic").checked && arabicOnly(text);
+      const direction = rtl ? "rtl" : "ltr";
+      const alignment = rtl ? "right" : "left";
+      const tag = block.type;
+      const cls = rtl ? "arabic" : (hasArabic(text) ? "mixed" : "plain");
+      const content = $("bolds").checked
+        ? inlineFormat(text)
+        : escapeHTML(text);
+
+      html.push(
+        `<${tag} class="${cls}" dir="${direction}" ` +
+        `style="direction:${direction};text-align:${alignment};` +
+        `unicode-bidi:plaintext;margin:0 0 10px;line-height:${rtl ? "1.9" : "1.55"}">` +
+        `${content}</${tag}>`
+      );
+
+      plain.push(removeMarkdown(text));
+    }
+
+    richHTML = html.join("\n");
+    plainText = plain.join("\n\n");
+    $("preview").innerHTML = richHTML || "সাজানো লেখা এখানে দেখা যাবে।";
+    $("status").textContent = blocks.length
+      ? "লেখা সাজানো হয়েছে। এখন কপি করতে পারো।"
+      : "";
+  }
+
+  async function copyRich() {
+    if (!richHTML) formatText();
+
+    try {
+      if (!navigator.clipboard || !window.ClipboardItem) {
+        throw new Error("Clipboard HTML unavailable");
+      }
+
+      const item = new ClipboardItem({
+        "text/html": new Blob([richHTML], { type: "text/html" }),
+        "text/plain": new Blob([plainText], { type: "text/plain" })
+      });
+
+      await navigator.clipboard.write([item]);
+      $("status").textContent =
+        "ফরম্যাটসহ কপি হয়েছে। এখন Google Docs-এ পেস্ট করো।";
+    } catch (error) {
+      $("status").textContent =
+        "এই ব্রাউজারে ফরম্যাটসহ কপি সমর্থিত হয়নি। সাধারণ লেখা কপি করার বোতাম ব্যবহার করো।";
+    }
+  }
+
+  async function copyPlain() {
+    if (!richHTML) formatText();
+
+    try {
+      await navigator.clipboard.writeText(plainText);
+      $("status").textContent = "সাধারণ লেখা কপি হয়েছে।";
+    } catch (error) {
+      const temp = document.createElement("textarea");
+      temp.value = plainText;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand("copy");
+      temp.remove();
+      $("status").textContent = "সাধারণ লেখা কপি হয়েছে।";
+    }
+  }
+
+  $("formatBtn").addEventListener("click", formatText);
+  $("richCopy").addEventListener("click", copyRich);
+  $("plainCopy").addEventListener("click", copyPlain);
+
+  $("clearBtn").addEventListener("click", () => {
+    $("source").value = "";
+    $("preview").textContent = "সাজানো লেখা এখানে দেখা যাবে।";
+    $("status").textContent = "";
+    richHTML = "";
+    plainText = "";
+  });
+})();
+</script>
+</body>
+</html>
 
